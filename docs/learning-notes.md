@@ -77,3 +77,76 @@ The timestamp when a record was created.
 The timestamp when a record was last changed.
 
 updated_at can later support incremental processing.
+
+
+## Lesson 3 — Relational Synthetic Data
+
+### Reproducibility
+
+Using a fixed random seed allows synthetic datasets to be generated
+predictably across multiple runs.
+
+Examples:
+
+random.seed(42)
+
+Faker.seed(42)
+
+
+### Referential Integrity
+
+Foreign-key values must reference existing parent records.
+
+Example:
+
+orders.customer_id must exist in customers.customer_id
+
+
+### Orphan Record
+
+A child record whose foreign key references a parent record that
+does not exist.
+
+
+### Data Invariant
+
+A condition that should always remain true.
+
+Examples:
+
+customer_id must be unique
+
+created_at <= updated_at
+
+price > 0
+
+quantity > 0
+
+
+### Weighted Randomness
+
+Synthetic data distributions can use probabilities instead of making
+every possible value equally likely.
+
+
+### Order Items
+
+order_items resolves the many-to-many relationship between orders
+and products.
+
+
+### Derived Data
+
+orders.total_amount should be calculated from order_items instead
+of independently generated.
+
+Formula:
+
+total_amount =
+SUM(quantity * unit_price)
+
+
+### assert
+
+Python assert statements can be used during development to verify
+assumptions and stop execution when an expected condition is false.

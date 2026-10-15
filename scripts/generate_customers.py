@@ -5,23 +5,55 @@ import pandas as pd
 from faker import Faker
 
 
-fake = Faker()
+# --------------------------------------------------
+# Configuration
+# --------------------------------------------------
 
 NUMBER_OF_CUSTOMERS = 1000
+RANDOM_SEED = 42
 
+random.seed(RANDOM_SEED)
+Faker.seed(RANDOM_SEED)
+
+fake = Faker()
+
+
+# --------------------------------------------------
+# Customer generator
+# --------------------------------------------------
 
 def generate_customers(number_of_customers):
     customers = []
+
+    now = datetime.now()
 
     for customer_number in range(1, number_of_customers + 1):
 
         created_at = fake.date_time_between(
             start_date="-2y",
-            end_date="now"
+            end_date=now
+        )
+
+        # Maximum allowed update time:
+        # either 90 days after creation or the current time,
+        # whichever comes first.
+
+        seconds_since_creation = int(
+            (now - created_at).total_seconds()
+        )
+
+        max_update_seconds = min(
+            seconds_since_creation,
+            90 * 24 * 60 * 60
+        )
+
+        update_offset = random.randint(
+            0,
+            max_update_seconds
         )
 
         updated_at = created_at + timedelta(
-            days=random.randint(0, 90)
+            seconds=update_offset
         )
 
         customer = {
@@ -39,29 +71,51 @@ def generate_customers(number_of_customers):
     return pd.DataFrame(customers)
 
 
-customers_df = generate_customers(NUMBER_OF_CUSTOMERS)
+# --------------------------------------------------
+# Generate data
+# --------------------------------------------------
+
+customers_df = generate_customers(
+    NUMBER_OF_CUSTOMERS
+)
+
+
+# --------------------------------------------------
+# Basic validation
+# --------------------------------------------------
+
+assert customers_df["customer_id"].is_unique
+assert customers_df["email"].is_unique
+
+assert (
+    customers_df["updated_at"]
+    >= customers_df["created_at"]
+).all()
+
+assert (
+    customers_df["updated_at"]
+    <= datetime.now()
+).all()
+
+
+# --------------------------------------------------
+# Save
+# --------------------------------------------------
 
 customers_df.to_csv(
     "data/generated/customers.csv",
     index=False
 )
 
-# print(customers_df.head())
-# print()
+
+# --------------------------------------------------
+# Output
+# --------------------------------------------------
+
+print(customers_df.head())
+
+print()
 print(f"Generated {len(customers_df)} customers.")
 
 print()
-print("Shape:")
-print(customers_df.shape)
-
-print()
-print("Missing values:")
-print(customers_df.isnull().sum())
-
-print()
-print("Duplicate customer IDs:")
-print(customers_df["customer_id"].duplicated().sum())
-
-print()
-print("Duplicate emails:")
-print(customers_df["email"].duplicated().sum())
+print("Customer validation passed.")
