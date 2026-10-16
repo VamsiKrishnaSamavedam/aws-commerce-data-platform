@@ -203,3 +203,71 @@ iteration and moves to the next iteration.
 
 A dictionary can provide fast access to related values using a key,
 such as looking up a delivery date using an order_id.
+
+## Lesson 5 — Amazon S3 and Data Ingestion
+
+### Amazon S3
+
+Amazon S3 is AWS object storage.
+
+### Bucket
+
+A bucket is a storage container for S3 objects.
+
+### Object
+
+An object is data stored in S3, such as a CSV or Parquet file.
+
+### Object Key
+
+The object key uniquely identifies an object inside a bucket.
+
+Example:
+
+bronze/customers/year=2026/month=10/day=16/customers.csv
+
+### Prefix
+
+A prefix is part of an S3 object key used to logically organize data.
+
+S3 does not use traditional filesystem folders even though the console
+displays prefixes like folders.
+
+### Boto3
+
+Boto3 is the AWS SDK for Python.
+
+Our Python ingestion code uses Boto3 to communicate with Amazon S3.
+
+### Bronze Layer
+
+Bronze contains source data with minimal modification.
+
+### Partitioning
+
+We organize Bronze data using ingestion dates:
+
+year=
+month=
+day=
+
+### Event Time
+
+The time when a business event occurred.
+
+### Ingestion Time
+
+The time when the data entered our data platform.
+
+### Environment Variable
+
+Configuration stored outside source code.
+
+Example:
+
+COMMERCE_S3_BUCKET
+
+### Idempotency
+
+A pipeline should be designed so that safely rerunning it does not
+create incorrect duplicate results.
