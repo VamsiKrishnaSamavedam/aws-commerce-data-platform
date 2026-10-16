@@ -150,3 +150,56 @@ SUM(quantity * unit_price)
 
 Python assert statements can be used during development to verify
 assumptions and stop execution when an expected condition is false.
+
+
+## Lesson 4 — Cross-Table Business Rules
+
+### Business Rule
+
+A condition that describes how valid business data should behave.
+
+Examples:
+
+- Cancelled orders should not be shipped.
+- Payment amount should match order total.
+- Shipment date cannot occur before order date.
+- Return date cannot occur before delivery date.
+
+
+### Referential Integrity
+
+Child records must reference legitimate parent records.
+
+
+### Composite Relationship Validation
+
+Sometimes validating each foreign key independently is not enough.
+
+Example:
+
+A returned product must not only exist, and the order must not only
+exist — the product must actually belong to that exact order.
+
+
+### Data Lineage
+
+Data lineage describes where data comes from and how it moves or
+relates across systems and transformations.
+
+
+### pandas merge
+
+A pandas merge combines DataFrames using matching columns and is
+conceptually similar to a SQL JOIN.
+
+
+### continue
+
+The continue statement skips the remaining code in the current loop
+iteration and moves to the next iteration.
+
+
+### Lookup Structure
+
+A dictionary can provide fast access to related values using a key,
+such as looking up a delivery date using an order_id.
