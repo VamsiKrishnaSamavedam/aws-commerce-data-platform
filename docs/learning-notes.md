@@ -271,3 +271,92 @@ COMMERCE_S3_BUCKET
 
 A pipeline should be designed so that safely rerunning it does not
 create incorrect duplicate results.
+
+
+## Lesson 6 — Production-Style Bronze Ingestion
+
+### Configuration-Driven Pipeline
+
+A generic pipeline can process multiple datasets using configuration
+rather than maintaining separate copy-pasted programs.
+
+### DRY
+
+DRY means Don't Repeat Yourself.
+
+Reusable functions reduce duplicated logic and make code easier to
+maintain.
+
+### Checksum
+
+A checksum is a value calculated from file contents.
+
+We use SHA-256 to create a fingerprint of each incoming batch.
+
+### SHA-256
+
+SHA-256 is a hashing algorithm.
+
+The same input produces the same hash.
+
+Changing the source data changes the hash.
+
+### Batch ID
+
+Our batch ID is derived from the SHA-256 checksum.
+
+It allows the ingestion pipeline to identify a specific input batch.
+
+### Manifest
+
+A manifest stores metadata describing a successfully ingested batch.
+
+Our manifest contains:
+
+dataset
+batch_id
+source_file
+file_size
+checksum
+ingestion timestamp
+S3 location
+
+### Metadata
+
+Metadata is data that describes other data.
+
+Examples:
+
+file size
+checksum
+ingestion timestamp
+source filename
+
+### Pre-Ingestion Validation
+
+Before uploading, our pipeline verifies that the local source exists,
+is a file, and is not empty.
+
+### Post-Upload Validation
+
+After uploading, the pipeline verifies that the S3 object exists and
+its size/checksum metadata match expectations.
+
+### Logging
+
+Logging records pipeline activity with timestamps and severity levels.
+
+Logging is more suitable than print statements for production
+applications.
+
+### Idempotency
+
+The same successfully processed batch can be safely retried without
+creating another copy.
+
+Our implementation uses:
+
+file checksum
+→ batch ID
+→ S3 manifest
+→ skip if already processed
