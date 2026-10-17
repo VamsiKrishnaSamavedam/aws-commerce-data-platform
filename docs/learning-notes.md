@@ -360,3 +360,87 @@ file checksum
 → batch ID
 → S3 manifest
 → skip if already processed
+
+
+## Lesson 9 — Data Quality and Quarantine
+
+### Data Quality Rule
+
+A condition that valid business data must satisfy.
+
+Examples:
+
+customer_id must exist
+
+first_name must not be blank
+
+email must exist
+
+timestamps must be parseable
+
+updated_at must not occur before created_at
+
+
+### Quarantine
+
+Quarantine stores records that fail data-quality checks.
+
+Invalid records should not silently disappear from the pipeline.
+
+
+### Rejection Reason
+
+A rejection reason explains why a record was quarantined.
+
+Examples:
+
+customer_id_missing
+
+email_missing
+
+created_at_invalid
+
+updated_at_before_created_at
+
+
+### Raw Value Preservation
+
+When parsing source data, the original value can be preserved before
+conversion.
+
+Example:
+
+created_at_raw = "not-a-date"
+
+created_at = NULL
+
+
+### Deterministic Deduplication
+
+Duplicate records should be resolved according to a defined rule.
+
+For customers we keep the record with the latest updated_at timestamp.
+
+
+### Window Function
+
+A Spark Window allows calculations across related rows without
+collapsing them into one aggregated record.
+
+We partition by customer_id and order by updated_at descending.
+
+
+### row_number
+
+row_number assigns an ordered number within a Window.
+
+The newest customer record receives row number 1.
+
+
+### Reconciliation
+
+Reconciliation verifies that every input record is accounted for.
+
+input_count =
+silver_count +
+quarantine_count
