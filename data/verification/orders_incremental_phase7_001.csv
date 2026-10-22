@@ -1,0 +1,2 @@
+order_id,customer_id,order_date,status,total_amount,updated_at
+O9000001,C000001,2026-10-22T21:20:00+00:00,completed,0.03,2026-10-22T21:20:00+00:00

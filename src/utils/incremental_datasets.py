@@ -1,6 +1,16 @@
 """Dataset contracts for the Phase 7 incremental commerce pipelines."""
 
 DATASETS = {
+    "customers": {
+        "key": "customer_id",
+        "columns": (
+            "customer_id", "first_name", "last_name", "email", "country",
+            "created_at", "updated_at",
+        ),
+        "mode": "upsert",
+        "timestamp": "updated_at",
+        "references": (),
+    },
     "products": {
         "key": "product_id",
         "columns": ("product_id", "product_name", "category", "price", "updated_at"),

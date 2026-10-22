@@ -1,0 +1,2 @@
+return_id,order_id,product_id,return_reason,return_date
+RET900001,O9000001,P90001,verification,2026-10-22T21:55:00+00:00

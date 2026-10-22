@@ -1,0 +1,2 @@
+shipment_id,order_id,carrier,ship_date,delivery_date,status,updated_at
+SHP900001,O9000001,VerificationCarrier,2026-10-22T21:50:00+00:00,2026-10-22T21:50:00+00:00,delivered,2026-10-22T21:50:00+00:00

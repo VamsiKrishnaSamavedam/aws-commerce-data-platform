@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "dataset": "orders",
+  "stream_id": "orders_incremental_v1",
+  "sequence": 1,
+  "batch_id": "698f52fc8a732827",
+  "source_s3_uri": "s3://aws-commerce-data-platform-036071343416-us-east-1/bronze/orders/incremental/year=2026/month=10/day=22/batch_id=698f52fc8a732827/orders.csv",
+  "sha256": "698f52fc8a732827bd0a39fd515e989a45ded6b51d20b3d41c0c524b1f8a3cb9",
+  "row_count": 1,
+  "published_at": "2026-10-22T21:20:00+00:00"
+}

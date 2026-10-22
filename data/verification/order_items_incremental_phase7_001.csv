@@ -1,0 +1,2 @@
+order_item_id,order_id,product_id,quantity,unit_price
+OI9000001,O9000001,P90001,1,0.01

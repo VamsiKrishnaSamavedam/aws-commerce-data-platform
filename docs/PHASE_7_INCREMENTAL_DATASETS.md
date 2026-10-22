@@ -34,6 +34,13 @@ Products stream then processed two one-row immutable verification manifests:
 - Sequence 2 (`c95b3cf5e64913a8`) completed through EventBridge, Step
   Functions, Glue, and DynamoDB; its completion watermark is 2.
 
+The other six requested dataset paths were subsequently verified with immutable
+sequence-1 manifests. Orders required one safe pre-MERGE replay after the
+shared contract initially omitted the read-only Customers parent definition;
+the corrected replay succeeded. Order items, payments, shipments, and returns
+all completed on their first test attempt. Each dataset's completion watermark
+is 1 after its verification batch.
+
 An initial sequence-1 execution exposed a missing `dataset` field in the
 verifier response. Glue and the ledger had completed correctly, but the final
 state-machine result mapping failed. The response was fixed and deployed
