@@ -23,6 +23,17 @@
 - EventBridge: inspect the rule target and the encrypted DLQ for undelivered
   manifest events.
 
+## Production safeguards
+
+- S3 versioning is enabled on the data bucket. Superseded versions under the
+  incremental customer prefix are retained for 90 days; current source and
+  manifest objects are not expired by this rule.
+- CloudWatch alarms notify the pipeline SNS topic for state-machine failures,
+  registrar errors, and any visible event in the DLQ.
+- The DLQ should normally remain empty. Treat a nonzero DLQ alarm as an
+  operational incident: inspect the event, correct the cause, and replay only
+  the immutable manifest after validation.
+
 ## Recovery
 
 Do not manually mark a post-MERGE failure as `FAILED`. The existing Glue
