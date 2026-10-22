@@ -34,3 +34,44 @@ dbt
 Gold
    ↓
 Athena / Redshift
+
+
+## Technical Documentation
+
+The AWS Commerce Data Platform implements an
+S3-based commerce data lake with AWS Glue,
+PySpark, Apache Iceberg, Amazon Athena,
+DynamoDB batch tracking, and AWS monitoring.
+
+### Architecture
+[System Architecture](docs/ARCHITECTURE.md)
+
+### Operational Recovery
+[Failure Recovery Runbook](docs/RECOVERY_RUNBOOK.md)
+
+### Implemented Capabilities
+- Seven commerce datasets in S3 Bronze and Silver
+- PySpark transformations and data quality checks
+- Rejected-record quarantine
+- Glue Data Catalog and Athena SQL analytics
+- Apache Iceberg incremental customer MERGE
+- SHA-256 batch identity verification
+- DynamoDB conditional processing claims
+- Heartbeat-based lease renewal
+- Idempotent batch replay
+- Tested post-commit failure recovery
+- CloudWatch operational queries
+- EventBridge and SNS failure alert configuration
+
+### Latest Recovery Validation
+- Iceberg customers: 1,015
+- Completed customer batches: 3
+- Recovery attempts for Batch 003: 2
+- Additional inserts on recovery: 0
+- Additional updates on recovery: 0
+- Expired batch claims after recovery: 0
+
+The implementation demonstrates recoverable,
+logical idempotency under controlled single-writer
+conditions. Automated orchestration and stronger
+production fencing are future enhancements.
