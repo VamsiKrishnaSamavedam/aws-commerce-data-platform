@@ -4,6 +4,7 @@ from zipfile import ZipFile, ZIP_DEFLATED
 
 SOURCES = (
     Path("src/utils/batch_ledger.py"),
+    Path("src/utils/incremental_datasets.py"),
     Path("src/utils/incremental_manifest.py"),
 )
 OUTPUT = Path("dist/commerce_ledger_lib_phase6.zip")

@@ -9,6 +9,7 @@ OUTPUT = ROOT / "dist" / "phase6_orchestrator.zip"
 FILES = (
     "scripts/register_incremental_batches.py",
     "src/utils/batch_ledger.py",
+    "src/utils/incremental_datasets.py",
     "src/utils/incremental_manifest.py",
 )
 

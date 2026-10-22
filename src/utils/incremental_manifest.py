@@ -4,6 +4,8 @@ import re
 from datetime import date
 from urllib.parse import urlparse
 
+from src.utils.incremental_datasets import DATASETS
+
 
 class ManifestValidationError(ValueError):
     """Raised when an incremental manifest is not safe to register."""
@@ -93,3 +95,49 @@ def validate_customer_manifest(manifest, bucket):
         "row_count": manifest["row_count"],
         "published_at": manifest["published_at"],
     }
+
+
+def validate_dataset_manifest(manifest, bucket):
+    """Validate a Phase 7 manifest, dispatching to the customer contract too."""
+    if manifest.get("dataset") == "customers":
+        return validate_customer_manifest(manifest, bucket)
+    dataset = manifest.get("dataset")
+    if dataset not in DATASETS:
+        raise ManifestValidationError("Unsupported manifest dataset")
+    required = {
+        "schema_version", "dataset", "stream_id", "sequence", "batch_id",
+        "source_s3_uri", "sha256", "row_count", "published_at",
+    }
+    if required.difference(manifest) or manifest["schema_version"] != 1:
+        raise ManifestValidationError("Invalid manifest envelope")
+    if not isinstance(manifest["stream_id"], str) or not manifest["stream_id"]:
+        raise ManifestValidationError("Invalid stream ID")
+    if (
+        isinstance(manifest["sequence"], bool)
+        or not isinstance(manifest["sequence"], int)
+        or manifest["sequence"] < 1
+    ):
+        raise ManifestValidationError("Sequence must be a positive integer")
+    if (
+        isinstance(manifest["row_count"], bool)
+        or not isinstance(manifest["row_count"], int)
+        or manifest["row_count"] < 1
+    ):
+        raise ManifestValidationError("Row count must be a positive integer")
+    if not SHA256_RE.fullmatch(manifest["sha256"]) or manifest["sha256"][:16] != manifest["batch_id"]:
+        raise ManifestValidationError("Invalid batch checksum identity")
+    parsed = urlparse(manifest["source_s3_uri"])
+    if parsed.scheme != "s3" or parsed.netloc != bucket:
+        raise ManifestValidationError("Unexpected source bucket")
+    key = parsed.path.lstrip("/")
+    pattern = re.compile(
+        rf"^bronze/{re.escape(dataset)}/incremental/year=(\d{{4}})/month=(\d{{2}})/day=(\d{{2}})/batch_id=([0-9a-f]{{16}})/{re.escape(dataset)}\.csv$"
+    )
+    match = pattern.fullmatch(key)
+    if not match or match.group(4) != manifest["batch_id"]:
+        raise ManifestValidationError("Unexpected dataset source path")
+    try:
+        date(*map(int, match.groups()[:3]))
+    except ValueError as error:
+        raise ManifestValidationError("Invalid source date") from error
+    return {**manifest, "source_key": key}

@@ -17,13 +17,22 @@ from boto3.dynamodb.conditions import Attr
 from src.utils.batch_ledger import BatchLedger
 from src.utils.incremental_manifest import (
     ManifestValidationError,
-    validate_customer_manifest,
+    validate_dataset_manifest,
 )
 
 
 AWS_REGION = "us-east-1"
 BUCKET = "aws-commerce-data-platform-036071343416-us-east-1"
 MAX_SOURCE_BYTES = 10 * 1024 * 1024
+GLUE_JOBS = {
+    "customers": "commerce-customers-iceberg-merge-ledger",
+    "products": "commerce-products-incremental-iceberg",
+    "orders": "commerce-orders-incremental-iceberg",
+    "order_items": "commerce-order-items-incremental-iceberg",
+    "payments": "commerce-payments-incremental-iceberg",
+    "shipments": "commerce-shipments-incremental-iceberg",
+    "returns": "commerce-returns-incremental-iceberg",
+}
 
 
 def read_and_verify_manifest(manifest_uri, s3_client=None):
@@ -47,7 +56,7 @@ def read_and_verify_manifest(manifest_uri, s3_client=None):
     except json.JSONDecodeError as error:
         raise ManifestValidationError("Manifest is not valid JSON") from error
 
-    normalized = validate_customer_manifest(manifest, BUCKET)
+    normalized = validate_dataset_manifest(manifest, BUCKET)
     head = s3_client.head_object(Bucket=BUCKET, Key=normalized["source_key"])
     metadata = head.get("Metadata", {})
     if head["ContentLength"] < 1 or head["ContentLength"] > MAX_SOURCE_BYTES:
@@ -100,6 +109,7 @@ def register_manifest(manifest_uri, s3_client=None, ledger=None):
         "batch_id": manifest["batch_id"],
         "sequence": manifest["sequence"],
         "source_s3_uri": manifest["source_s3_uri"],
+        "glue_job_name": GLUE_JOBS[manifest["dataset"]],
         "last_completed_sequence": completed,
     }
 
@@ -141,6 +151,7 @@ def verify_completion(event, ledger=None):
     )
     return {
         "action": "COMPLETED" if complete else "INCOMPLETE",
+        "dataset": dataset,
         "batch_id": batch["batch_id"],
         "sequence": int(batch["sequence"]),
         "stream_id": batch["stream_id"],

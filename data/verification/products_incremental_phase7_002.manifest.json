@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "dataset": "products",
+  "stream_id": "products_incremental_v1",
+  "sequence": 2,
+  "batch_id": "c95b3cf5e64913a8",
+  "source_s3_uri": "s3://aws-commerce-data-platform-036071343416-us-east-1/bronze/products/incremental/year=2026/month=10/day=22/batch_id=c95b3cf5e64913a8/products.csv",
+  "sha256": "c95b3cf5e64913a8547b0d1fc502096bc000724868179fa2c9f74a5ffd906403",
+  "row_count": 1,
+  "published_at": "2026-10-22T21:15:00+00:00"
+}

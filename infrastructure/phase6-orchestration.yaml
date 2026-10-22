@@ -1,9 +1,11 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Safe, sequenced customer-batch orchestration for the Commerce Data Platform.
+Description: Safe sequenced manifest orchestration for Commerce incremental datasets.
 
 Parameters:
   ArtifactBucket: {Type: String}
   ArtifactKey: {Type: String}
+  GlueScriptKey: {Type: String, Default: glue-scripts/phase7/glue_incremental_commerce_dataset.py}
+  GlueLibraryKey: {Type: String, Default: glue-scripts/dependencies/commerce_ledger_lib_phase7.zip}
   DataBucket: {Type: String, Default: aws-commerce-data-platform-036071343416-us-east-1}
   LedgerTableName: {Type: String, Default: commerce-batch-ledger}
   GlueJobName: {Type: String, Default: commerce-customers-iceberg-merge-ledger}
@@ -12,15 +14,10 @@ Parameters:
 Resources:
   OrchestrationLogGroup:
     Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: /aws/vendedlogs/states/commerce-incremental-customers
-      RetentionInDays: 30
+    Properties: {LogGroupName: /aws/vendedlogs/states/commerce-incremental-customers, RetentionInDays: 30}
   EventFailureQueue:
     Type: AWS::SQS::Queue
-    Properties:
-      QueueName: commerce-incremental-customer-events-dlq
-      MessageRetentionPeriod: 1209600
-      SqsManagedSseEnabled: true
+    Properties: {QueueName: commerce-incremental-customer-events-dlq, MessageRetentionPeriod: 1209600, SqsManagedSseEnabled: true}
   EventFailureQueuePolicy:
     Type: AWS::SQS::QueuePolicy
     Properties:
@@ -37,20 +34,16 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       RoleName: commerce-incremental-batch-registrar
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement: [{Effect: Allow, Principal: {Service: lambda.amazonaws.com}, Action: sts:AssumeRole}]
+      AssumeRolePolicyDocument: {Version: '2012-10-17', Statement: [{Effect: Allow, Principal: {Service: lambda.amazonaws.com}, Action: sts:AssumeRole}]}
       Policies:
         - PolicyName: registrar-least-privilege
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              - Effect: Allow
-                Action: [logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents]
-                Resource: '*'
+              - {Effect: Allow, Action: [logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents], Resource: '*'}
               - Effect: Allow
                 Action: [s3:GetObject, s3:HeadObject]
-                Resource: !Sub arn:${AWS::Partition}:s3:::${DataBucket}/bronze/customers/incremental/*
+                Resource: !Sub arn:${AWS::Partition}:s3:::${DataBucket}/bronze/*/incremental/*
               - Effect: Allow
                 Action: [dynamodb:GetItem, dynamodb:PutItem, dynamodb:UpdateItem, dynamodb:Scan, dynamodb:TransactWriteItems]
                 Resource: !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${LedgerTableName}
@@ -74,104 +67,54 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       RoleName: commerce-incremental-customer-orchestrator
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement: [{Effect: Allow, Principal: {Service: states.amazonaws.com}, Action: sts:AssumeRole}]
+      AssumeRolePolicyDocument: {Version: '2012-10-17', Statement: [{Effect: Allow, Principal: {Service: states.amazonaws.com}, Action: sts:AssumeRole}]}
       Policies:
         - PolicyName: orchestrator-invocation
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              - Effect: Allow
-                Action: lambda:InvokeFunction
-                Resource: !GetAtt OrchestratorFunction.Arn
+              - {Effect: Allow, Action: lambda:InvokeFunction, Resource: !GetAtt OrchestratorFunction.Arn}
               - Effect: Allow
                 Action: [glue:StartJobRun, glue:GetJobRun, glue:BatchStopJobRun]
-                Resource: !Sub arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:job/${GlueJobName}
-              - Effect: Allow
-                Action: [logs:CreateLogDelivery, logs:GetLogDelivery, logs:UpdateLogDelivery, logs:DeleteLogDelivery, logs:ListLogDeliveries, logs:PutResourcePolicy, logs:DescribeResourcePolicies, logs:DescribeLogGroups]
-                Resource: '*'
+                Resource:
+                  - !Sub arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:job/${GlueJobName}
+                  - !Sub arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:job/commerce-products-incremental-iceberg
+                  - !Sub arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:job/commerce-orders-incremental-iceberg
+                  - !Sub arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:job/commerce-order-items-incremental-iceberg
+                  - !Sub arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:job/commerce-payments-incremental-iceberg
+                  - !Sub arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:job/commerce-shipments-incremental-iceberg
+                  - !Sub arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:job/commerce-returns-incremental-iceberg
+              - {Effect: Allow, Action: [logs:CreateLogDelivery, logs:GetLogDelivery, logs:UpdateLogDelivery, logs:DeleteLogDelivery, logs:ListLogDeliveries, logs:PutResourcePolicy, logs:DescribeResourcePolicies, logs:DescribeLogGroups], Resource: '*'}
   CustomerOrchestrator:
     Type: AWS::StepFunctions::StateMachine
     Properties:
       StateMachineName: commerce-incremental-customer-orchestrator
       StateMachineType: STANDARD
       RoleArn: !GetAtt StateMachineRole.Arn
-      LoggingConfiguration:
-        Destinations: [{CloudWatchLogsLogGroup: {LogGroupArn: !GetAtt OrchestrationLogGroup.Arn}}]
-        IncludeExecutionData: false
-        Level: ALL
+      LoggingConfiguration: {Destinations: [{CloudWatchLogsLogGroup: {LogGroupArn: !GetAtt OrchestrationLogGroup.Arn}}], IncludeExecutionData: false, Level: ALL}
       DefinitionString: !Sub |
-        {"StartAt":"Register","States":{"Register":{"Type":"Task","Resource":"arn:aws:states:::lambda:invoke","Parameters":{"FunctionName":"${OrchestratorFunction.Arn}","Payload.$":"$"},"ResultSelector":{"action.$":"$.Payload.action","dataset.$":"$.Payload.dataset","batch_id.$":"$.Payload.batch_id","source_s3_uri.$":"$.Payload.source_s3_uri"},"ResultPath":"$.registration","Next":"ShouldRunGlue"},"ShouldRunGlue":{"Type":"Choice","Choices":[{"Variable":"$.registration.action","StringEquals":"START_GLUE","Next":"RunGlue"}],"Default":"NoWork"},"RunGlue":{"Type":"Task","Resource":"arn:aws:states:::glue:startJobRun.sync","Parameters":{"JobName":"${GlueJobName}","Arguments":{"--INCREMENTAL_SOURCE.$":"$.registration.source_s3_uri","--SIMULATE_POST_MERGE_FAILURE":"false"}},"ResultPath":"$.glue","Catch":[{"ErrorEquals":["States.ALL"],"Next":"GlueFailed"}],"Next":"VerifyCompletion"},"VerifyCompletion":{"Type":"Task","Resource":"arn:aws:states:::lambda:invoke","Parameters":{"FunctionName":"${OrchestratorFunction.Arn}","Payload":{"operation":"verify_completion","dataset.$":"$.registration.dataset","batch_id.$":"$.registration.batch_id"}},"ResultSelector":{"action.$":"$.Payload.action"},"ResultPath":"$.verification","Next":"WasCompleted"},"WasCompleted":{"Type":"Choice","Choices":[{"Variable":"$.verification.action","StringEquals":"COMPLETED","Next":"DispatchNext"}],"Default":"VerificationFailed"},"DispatchNext":{"Type":"Task","Resource":"arn:aws:states:::lambda:invoke","Parameters":{"FunctionName":"${OrchestratorFunction.Arn}","Payload":{"operation":"dispatch_next","dataset":"customers","stream_id":"customers_incremental_v1"}},"Next":"Succeeded"},"NoWork":{"Type":"Succeed"},"Succeeded":{"Type":"Succeed"},"GlueFailed":{"Type":"Fail","Error":"GlueJobFailed"},"VerificationFailed":{"Type":"Fail","Error":"LedgerCompletionNotVerified"}}}
+        {"StartAt":"Register","States":{"Register":{"Type":"Task","Resource":"arn:aws:states:::lambda:invoke","Parameters":{"FunctionName":"${OrchestratorFunction.Arn}","Payload.$":"$"},"ResultSelector":{"action.$":"$.Payload.action","dataset.$":"$.Payload.dataset","batch_id.$":"$.Payload.batch_id","source_s3_uri.$":"$.Payload.source_s3_uri","glue_job_name.$":"$.Payload.glue_job_name"},"ResultPath":"$.registration","Next":"ShouldRunGlue"},"ShouldRunGlue":{"Type":"Choice","Choices":[{"Variable":"$.registration.action","StringEquals":"START_GLUE","Next":"ChooseGlueJob"}],"Default":"NoWork"},"ChooseGlueJob":{"Type":"Choice","Choices":[{"Variable":"$.registration.dataset","StringEquals":"customers","Next":"RunCustomerGlue"}],"Default":"RunDatasetGlue"},"RunCustomerGlue":{"Type":"Task","Resource":"arn:aws:states:::glue:startJobRun.sync","Parameters":{"JobName":"${GlueJobName}","Arguments":{"--INCREMENTAL_SOURCE.$":"$.registration.source_s3_uri","--SIMULATE_POST_MERGE_FAILURE":"false"}},"ResultPath":"$.glue","Catch":[{"ErrorEquals":["States.ALL"],"Next":"GlueFailed"}],"Next":"VerifyCompletion"},"RunDatasetGlue":{"Type":"Task","Resource":"arn:aws:states:::glue:startJobRun.sync","Parameters":{"JobName.$":"$.registration.glue_job_name","Arguments":{"--DATASET.$":"$.registration.dataset","--MODE":"MERGE","--BUCKET":"${DataBucket}","--SOURCE_PATH.$":"$.registration.source_s3_uri"}},"ResultPath":"$.glue","Catch":[{"ErrorEquals":["States.ALL"],"Next":"GlueFailed"}],"Next":"VerifyCompletion"},"VerifyCompletion":{"Type":"Task","Resource":"arn:aws:states:::lambda:invoke","Parameters":{"FunctionName":"${OrchestratorFunction.Arn}","Payload":{"operation":"verify_completion","dataset.$":"$.registration.dataset","batch_id.$":"$.registration.batch_id"}},"ResultSelector":{"action.$":"$.Payload.action","dataset.$":"$.Payload.dataset","stream_id.$":"$.Payload.stream_id"},"ResultPath":"$.verification","Next":"WasCompleted"},"WasCompleted":{"Type":"Choice","Choices":[{"Variable":"$.verification.action","StringEquals":"COMPLETED","Next":"DispatchNext"}],"Default":"VerificationFailed"},"DispatchNext":{"Type":"Task","Resource":"arn:aws:states:::lambda:invoke","Parameters":{"FunctionName":"${OrchestratorFunction.Arn}","Payload":{"operation":"dispatch_next","dataset.$":"$.verification.dataset","stream_id.$":"$.verification.stream_id"}},"Next":"Succeeded"},"NoWork":{"Type":"Succeed"},"Succeeded":{"Type":"Succeed"},"GlueFailed":{"Type":"Fail","Error":"GlueJobFailed"},"VerificationFailed":{"Type":"Fail","Error":"LedgerCompletionNotVerified"}}}
   ManifestCreatedRule:
     Type: AWS::Events::Rule
     Properties:
       Name: commerce-customer-manifest-created
-      EventPattern:
-        source: [aws.s3]
-        detail-type: [Object Created]
-        detail: {bucket: {name: [!Ref DataBucket]}, object: {key: [{suffix: manifest.json}]}}
+      EventPattern: {source: [aws.s3], detail-type: [Object Created], detail: {bucket: {name: [!Ref DataBucket]}, object: {key: [{wildcard: bronze/*/incremental/*/manifest.json}]}}}
       State: ENABLED
-      Targets:
-        - Arn: !Ref CustomerOrchestrator
-          Id: customer-manifest-orchestrator
-          RoleArn: !GetAtt EventBridgeStartExecutionRole.Arn
-          RetryPolicy: {MaximumEventAgeInSeconds: 3600, MaximumRetryAttempts: 12}
-          DeadLetterConfig: {Arn: !GetAtt EventFailureQueue.Arn}
+      Targets: [{Arn: !Ref CustomerOrchestrator, Id: customer-manifest-orchestrator, RoleArn: !GetAtt EventBridgeStartExecutionRole.Arn, RetryPolicy: {MaximumEventAgeInSeconds: 3600, MaximumRetryAttempts: 12}, DeadLetterConfig: {Arn: !GetAtt EventFailureQueue.Arn}}]
   EventBridgeStartExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement: [{Effect: Allow, Principal: {Service: events.amazonaws.com}, Action: sts:AssumeRole}]
-      Policies:
-        - PolicyName: start-customer-orchestrator
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement: [{Effect: Allow, Action: states:StartExecution, Resource: !Ref CustomerOrchestrator}]
+      AssumeRolePolicyDocument: {Version: '2012-10-17', Statement: [{Effect: Allow, Principal: {Service: events.amazonaws.com}, Action: sts:AssumeRole}]}
+      Policies: [{PolicyName: start-customer-orchestrator, PolicyDocument: {Version: '2012-10-17', Statement: [{Effect: Allow, Action: states:StartExecution, Resource: !Ref CustomerOrchestrator}]}}]
   OrchestratorFailuresAlarm:
     Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: commerce-incremental-customer-orchestrator-failures
-      Namespace: AWS/States
-      MetricName: ExecutionsFailed
-      Dimensions: [{Name: StateMachineArn, Value: !Ref CustomerOrchestrator}]
-      Statistic: Sum
-      Period: 300
-      EvaluationPeriods: 1
-      Threshold: 1
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      TreatMissingData: notBreaching
-      AlarmActions: [!Ref AlertTopicArn]
+    Properties: {AlarmName: commerce-incremental-customer-orchestrator-failures, Namespace: AWS/States, MetricName: ExecutionsFailed, Dimensions: [{Name: StateMachineArn, Value: !Ref CustomerOrchestrator}], Statistic: Sum, Period: 300, EvaluationPeriods: 1, Threshold: 1, ComparisonOperator: GreaterThanOrEqualToThreshold, TreatMissingData: notBreaching, AlarmActions: [!Ref AlertTopicArn]}
   RegistrarErrorsAlarm:
     Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: commerce-incremental-batch-registrar-errors
-      Namespace: AWS/Lambda
-      MetricName: Errors
-      Dimensions: [{Name: FunctionName, Value: !Ref OrchestratorFunction}]
-      Statistic: Sum
-      Period: 300
-      EvaluationPeriods: 1
-      Threshold: 1
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      TreatMissingData: notBreaching
-      AlarmActions: [!Ref AlertTopicArn]
+    Properties: {AlarmName: commerce-incremental-batch-registrar-errors, Namespace: AWS/Lambda, MetricName: Errors, Dimensions: [{Name: FunctionName, Value: !Ref OrchestratorFunction}], Statistic: Sum, Period: 300, EvaluationPeriods: 1, Threshold: 1, ComparisonOperator: GreaterThanOrEqualToThreshold, TreatMissingData: notBreaching, AlarmActions: [!Ref AlertTopicArn]}
   EventDlqMessagesAlarm:
     Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: commerce-incremental-customer-events-dlq-messages
-      Namespace: AWS/SQS
-      MetricName: ApproximateNumberOfMessagesVisible
-      Dimensions: [{Name: QueueName, Value: !GetAtt EventFailureQueue.QueueName}]
-      Statistic: Maximum
-      Period: 300
-      EvaluationPeriods: 1
-      Threshold: 1
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      TreatMissingData: notBreaching
-      AlarmActions: [!Ref AlertTopicArn]
-
+    Properties: {AlarmName: commerce-incremental-customer-events-dlq-messages, Namespace: AWS/SQS, MetricName: ApproximateNumberOfMessagesVisible, Dimensions: [{Name: QueueName, Value: !GetAtt EventFailureQueue.QueueName}], Statistic: Maximum, Period: 300, EvaluationPeriods: 1, Threshold: 1, ComparisonOperator: GreaterThanOrEqualToThreshold, TreatMissingData: notBreaching, AlarmActions: [!Ref AlertTopicArn]}
 Outputs:
   StateMachineArn: {Value: !Ref CustomerOrchestrator}
   RegistrarFunctionArn: {Value: !GetAtt OrchestratorFunction.Arn}
