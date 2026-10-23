@@ -1,0 +1,126 @@
+version: 2
+
+models:
+  - name: stg_customers
+    description: Normalized current customer records.
+    columns:
+      - name: customer_id
+        data_tests: [not_null, unique]
+
+  - name: stg_products
+    description: Normalized current product records.
+    columns:
+      - name: product_id
+        data_tests: [not_null, unique]
+      - name: price
+        data_tests:
+          - non_negative:
+              arguments:
+                column_name: price
+
+  - name: stg_orders
+    description: Typed order records at one row per order.
+    columns:
+      - name: order_id
+        data_tests: [not_null, unique]
+      - name: customer_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_customers')
+                field: customer_id
+      - name: order_status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['completed', 'cancelled', 'shipped', 'processing']
+      - name: order_total_amount
+        data_tests:
+          - non_negative:
+              arguments:
+                column_name: order_total_amount
+
+  - name: stg_order_items
+    description: Typed immutable order line items.
+    columns:
+      - name: order_item_id
+        data_tests: [not_null, unique]
+      - name: order_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_orders')
+                field: order_id
+      - name: product_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_products')
+                field: product_id
+      - name: quantity
+        data_tests:
+          - non_negative:
+              arguments:
+                column_name: quantity
+      - name: unit_price
+        data_tests:
+          - non_negative:
+              arguments:
+                column_name: unit_price
+
+  - name: stg_payments
+    description: Typed payment attempts.
+    columns:
+      - name: payment_id
+        data_tests: [not_null, unique]
+      - name: order_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_orders')
+                field: order_id
+      - name: payment_status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['completed', 'failed']
+      - name: payment_amount
+        data_tests:
+          - non_negative:
+              arguments:
+                column_name: payment_amount
+
+  - name: stg_shipments
+    description: Typed shipment lifecycle records.
+    columns:
+      - name: shipment_id
+        data_tests: [not_null, unique]
+      - name: order_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_orders')
+                field: order_id
+      - name: shipment_status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['shipped', 'delivered']
+
+  - name: stg_returns
+    description: Typed product return records.
+    columns:
+      - name: return_id
+        data_tests: [not_null, unique]
+      - name: order_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_orders')
+                field: order_id
+      - name: product_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_products')
+                field: product_id

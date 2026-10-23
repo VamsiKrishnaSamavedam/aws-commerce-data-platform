@@ -1,0 +1,31 @@
+version: 2
+
+sources:
+  - name: commerce_incremental
+    description: >
+      Immutable-source and merge-managed Iceberg tables produced by the AWS
+      Commerce Data Platform. dbt treats these relations as read-only.
+    database: awsdatacatalog
+    schema: commerce_incremental
+    tables:
+      - name: customers
+        identifier: customers_iceberg
+        description: Current customer records after incremental reconciliation.
+      - name: products
+        identifier: products_iceberg
+        description: Current product records after incremental reconciliation.
+      - name: orders
+        identifier: orders_iceberg
+        description: Current order records after incremental reconciliation.
+      - name: order_items
+        identifier: order_items_iceberg
+        description: Immutable order line items.
+      - name: payments
+        identifier: payments_iceberg
+        description: Payment attempts associated with orders.
+      - name: shipments
+        identifier: shipments_iceberg
+        description: Shipment lifecycle records associated with orders.
+      - name: returns
+        identifier: returns_iceberg
+        description: Product returns associated with orders.

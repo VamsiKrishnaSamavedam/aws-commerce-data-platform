@@ -1,0 +1,91 @@
+version: 2
+
+models:
+  - name: dim_customers
+    description: Customer dimension at one row per customer.
+    columns:
+      - name: customer_id
+        data_tests: [not_null, unique]
+
+  - name: dim_products
+    description: Product dimension at one row per product.
+    columns:
+      - name: product_id
+        data_tests: [not_null, unique]
+
+  - name: fct_orders
+    description: Order fact at one row per order with pre-aggregated commerce lifecycle measures.
+    columns:
+      - name: order_id
+        data_tests: [not_null, unique]
+      - name: customer_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_customers')
+                field: customer_id
+      - name: order_total_amount
+        data_tests:
+          - non_negative:
+              arguments:
+                column_name: order_total_amount
+
+  - name: fct_order_items
+    description: Immutable order item fact at one row per order item.
+    columns:
+      - name: order_item_id
+        data_tests: [not_null, unique]
+      - name: order_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('fct_orders')
+                field: order_id
+      - name: product_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_products')
+                field: product_id
+
+  - name: fct_payments
+    description: Payment-attempt fact at one row per payment.
+    columns:
+      - name: payment_id
+        data_tests: [not_null, unique]
+      - name: order_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('fct_orders')
+                field: order_id
+
+  - name: fct_shipments
+    description: Shipment fact at one row per shipment.
+    columns:
+      - name: shipment_id
+        data_tests: [not_null, unique]
+      - name: order_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('fct_orders')
+                field: order_id
+
+  - name: fct_returns
+    description: Return fact at one row per return.
+    columns:
+      - name: return_id
+        data_tests: [not_null, unique]
+      - name: order_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('fct_orders')
+                field: order_id
+      - name: product_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_products')
+                field: product_id

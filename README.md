@@ -34,6 +34,24 @@ dbt
 Gold
    ↓
 Athena / Redshift
+```
+
+## dbt analytics layer
+
+The verified dbt project is in [`dbt/`](dbt/README.md). It reads the seven
+Iceberg ingestion tables from `commerce_incremental` and writes only to the
+separate `commerce_analytics` database and `gold_dbt/` S3 prefix.
+
+With the local `.venv-dbt` environment active, run:
+
+```powershell
+dbt build --project-dir .\dbt --profiles-dir "$HOME\.dbt"
+```
+
+The project creates typed staging views plus customer/product dimensions and
+order, order-item, payment, shipment, and return fact tables. Built-in and
+custom tests validate keys, relationships, permitted lifecycle statuses, and
+non-negative monetary and quantity fields.
 
 
 ## Technical Documentation
