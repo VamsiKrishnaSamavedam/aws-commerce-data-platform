@@ -236,7 +236,6 @@ Resources:
       Role: !GetAtt DbtBuildDispatcherRole.Arn
       Timeout: 60
       MemorySize: 128
-      ReservedConcurrentExecutions: 1
       Environment: {Variables: {CODEBUILD_PROJECT: !Ref DbtBuildProject}}
       Code: {S3Bucket: !Ref ArtifactBucket, S3Key: !Ref ArtifactKey}
   DbtBuildDispatchRule:
