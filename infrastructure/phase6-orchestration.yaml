@@ -173,7 +173,7 @@ Resources:
               - {Effect: Allow, Action: [logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents], Resource: '*'}
               - {Effect: Allow, Action: [athena:StartQueryExecution, athena:GetQueryExecution, athena:GetQueryResults, athena:StopQueryExecution, athena:GetWorkGroup], Resource: '*'}
               - Effect: Allow
-                Action: [glue:GetDatabase, glue:GetDatabases, glue:GetTable, glue:GetTables, glue:CreateTable, glue:UpdateTable, glue:DeleteTable]
+                Action: [glue:GetDatabase, glue:GetDatabases, glue:GetTable, glue:GetTables, glue:GetTableVersions, glue:CreateTable, glue:UpdateTable, glue:DeleteTable]
                 Resource:
                   - !Sub arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:catalog
                   - !Sub arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:database/commerce_incremental
