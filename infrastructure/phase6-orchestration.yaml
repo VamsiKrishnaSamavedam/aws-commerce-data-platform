@@ -181,7 +181,8 @@ Resources:
                   - !Sub arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:table/commerce_incremental/*
                   - !Sub arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:table/commerce_analytics/*
               - Effect: Allow
-                Action: s3:ListBucket
+                # Athena validates the query-result bucket before it starts a query.
+                Action: [s3:ListBucket, s3:GetBucketLocation]
                 Resource: !Sub 'arn:${AWS::Partition}:s3:::${DataBucket}'
               - Effect: Allow
                 Action: s3:GetObject
