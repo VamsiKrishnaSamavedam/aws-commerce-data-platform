@@ -33,6 +33,23 @@ Use `dbt build --select staging` to validate typed source views first, or
 `dbt build --select marts` to rebuild the analytics marts after a successful
 staging run.
 
+## Automation and reporting
+
+The CloudFormation stack starts the `commerce-dbt-athena-build` CodeBuild
+project after a verified incremental workflow completes. The dispatcher skips
+duplicate/no-work workflow executions and the project allows one build at a
+time so competing full-refresh builds cannot race.
+
+Saved Athena-ready reporting SQL lives in `analyses/`. These queries are also
+deployed as named queries by the orchestration stack. QuickSight is deliberately
+not provisioned: enable it separately only when its subscription and reader
+costs are approved.
+
+The current marts use full rebuilds. This is intentional: a universal,
+trustworthy source watermark is not yet present on every dataset. Convert a
+model to dbt incremental materialization only after its source contract exposes
+an immutable ingestion timestamp or batch sequence and a verified unique key.
+
 ## Model grain
 
 - `dim_customers`: one row per customer.

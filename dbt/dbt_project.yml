@@ -5,6 +5,7 @@ config-version: 2
 profile: 'commerce_analytics'
 
 model-paths: ["models"]
+analysis-paths: ["analyses"]
 test-paths: ["tests"]
 macro-paths: ["macros"]
 

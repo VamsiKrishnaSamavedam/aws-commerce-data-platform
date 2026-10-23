@@ -1,0 +1,31 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.12
+    commands:
+      - python -m pip install --upgrade pip
+      - python -m pip install "dbt-core==1.12.0" "dbt-athena==1.11.1"
+  pre_build:
+    commands:
+      - mkdir -p "$HOME/.dbt"
+      - |
+        cat > "$HOME/.dbt/profiles.yml" <<EOF
+        commerce_analytics:
+          target: prod
+          outputs:
+            prod:
+              type: athena
+              database: awsdatacatalog
+              schema: commerce_analytics
+              region_name: $AWS_REGION
+              s3_staging_dir: $DBT_S3_STAGING_DIR
+              s3_data_dir: $DBT_S3_DATA_DIR
+              s3_data_naming: schema_table_unique
+              threads: 4
+              num_retries: 3
+        EOF
+  build:
+    commands:
+      - dbt build --project-dir dbt --profiles-dir "$HOME/.dbt"

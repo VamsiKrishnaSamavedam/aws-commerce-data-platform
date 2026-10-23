@@ -159,8 +159,129 @@ Resources:
     Properties:
       DashboardName: commerce-data-platform-operations
       DashboardBody: !Sub |
-        {"widgets":[{"type":"metric","properties":{"title":"Workflow failures","view":"timeSeries","region":"${AWS::Region}","metrics":[["AWS/States","ExecutionsFailed","StateMachineArn","${CustomerOrchestrator}"]] }},{"type":"metric","properties":{"title":"Registrar errors and DLQ","view":"timeSeries","region":"${AWS::Region}","metrics":[["AWS/Lambda","Errors","FunctionName","${OrchestratorFunction}"],["AWS/SQS","ApproximateNumberOfMessagesVisible","QueueName","${EventFailureQueue.QueueName}"]] }},{"type":"metric","properties":{"title":"Ledger audit","view":"timeSeries","region":"${AWS::Region}","metrics":[["CommerceDataPlatform/Operations","StuckProcessing"],[".","WatermarkGaps"]]}}]}
+        {"widgets":[{"type":"metric","properties":{"title":"Workflow failures","view":"timeSeries","region":"${AWS::Region}","metrics":[["AWS/States","ExecutionsFailed","StateMachineArn","${CustomerOrchestrator}"]] }},{"type":"metric","properties":{"title":"Registrar errors and DLQ","view":"timeSeries","region":"${AWS::Region}","metrics":[["AWS/Lambda","Errors","FunctionName","${OrchestratorFunction}"],["AWS/SQS","ApproximateNumberOfMessagesVisible","QueueName","${EventFailureQueue.QueueName}"]] }},{"type":"metric","properties":{"title":"Ledger audit","view":"timeSeries","region":"${AWS::Region}","metrics":[["CommerceDataPlatform/Operations","StuckProcessing"],[".","WatermarkGaps"]]}},{"type":"metric","properties":{"title":"dbt build failures","view":"timeSeries","region":"${AWS::Region}","metrics":[["AWS/CodeBuild","FailedBuilds","ProjectName","${DbtBuildProject}"]]}}]}
+  DbtBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: commerce-dbt-athena-build
+      AssumeRolePolicyDocument: {Version: '2012-10-17', Statement: [{Effect: Allow, Principal: {Service: codebuild.amazonaws.com}, Action: sts:AssumeRole}]}
+      Policies:
+        - PolicyName: dbt-athena-least-privilege
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - {Effect: Allow, Action: [logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents], Resource: '*'}
+              - {Effect: Allow, Action: [athena:StartQueryExecution, athena:GetQueryExecution, athena:GetQueryResults, athena:StopQueryExecution, athena:GetWorkGroup], Resource: '*'}
+              - Effect: Allow
+                Action: [glue:GetDatabase, glue:GetDatabases, glue:GetTable, glue:GetTables, glue:CreateTable, glue:UpdateTable, glue:DeleteTable]
+                Resource:
+                  - !Sub arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:catalog
+                  - !Sub arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:database/commerce_incremental
+                  - !Sub arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:database/commerce_analytics
+                  - !Sub arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:table/commerce_incremental/*
+                  - !Sub arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:table/commerce_analytics/*
+              - Effect: Allow
+                Action: s3:ListBucket
+                Resource: !Sub 'arn:${AWS::Partition}:s3:::${DataBucket}'
+              - Effect: Allow
+                Action: s3:GetObject
+                Resource: !Sub 'arn:${AWS::Partition}:s3:::${DataBucket}/*'
+              - Effect: Allow
+                Action: [s3:PutObject, s3:GetObject, s3:DeleteObject]
+                Resource:
+                  - !Sub arn:${AWS::Partition}:s3:::${DataBucket}/athena-results/dbt/*
+                  - !Sub arn:${AWS::Partition}:s3:::${DataBucket}/gold_dbt/*
+  DbtBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: commerce-dbt-athena-build
+      Description: Rebuilds verified dbt analytics models after incremental commerce completion.
+      ServiceRole: !GetAtt DbtBuildRole.Arn
+      ConcurrentBuildLimit: 1
+      TimeoutInMinutes: 30
+      Source: {Type: GITHUB, Location: https://github.com/VamsiKrishnaSamavedam/aws-commerce-data-platform.git, BuildSpec: buildspec-dbt.yml, GitCloneDepth: 1}
+      SourceVersion: master
+      Artifacts: {Type: NO_ARTIFACTS}
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:7.0
+        Type: LINUX_CONTAINER
+        PrivilegedMode: false
+        EnvironmentVariables:
+          - Name: AWS_REGION
+            Value: !Ref AWS::Region
+          - Name: DBT_S3_STAGING_DIR
+            Value: !Sub 's3://${DataBucket}/athena-results/dbt/'
+          - Name: DBT_S3_DATA_DIR
+            Value: !Sub 's3://${DataBucket}/gold_dbt/'
+      LogsConfig: {CloudWatchLogs: {Status: ENABLED, GroupName: /aws/codebuild/commerce-dbt-athena-build}}
+  DbtBuildDispatcherRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: commerce-dbt-build-dispatcher
+      AssumeRolePolicyDocument: {Version: '2012-10-17', Statement: [{Effect: Allow, Principal: {Service: lambda.amazonaws.com}, Action: sts:AssumeRole}]}
+      Policies:
+        - PolicyName: dispatch-verified-dbt-builds
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - {Effect: Allow, Action: [logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents], Resource: '*'}
+              - {Effect: Allow, Action: [codebuild:StartBuild, codebuild:ListBuildsForProject, codebuild:BatchGetBuilds], Resource: !GetAtt DbtBuildProject.Arn}
+  DbtBuildDispatcherFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: commerce-dbt-build-dispatcher
+      Runtime: python3.12
+      Handler: scripts.dispatch_dbt_build.lambda_handler
+      Role: !GetAtt DbtBuildDispatcherRole.Arn
+      Timeout: 60
+      MemorySize: 128
+      ReservedConcurrentExecutions: 1
+      Environment: {Variables: {CODEBUILD_PROJECT: !Ref DbtBuildProject}}
+      Code: {S3Bucket: !Ref ArtifactBucket, S3Key: !Ref ArtifactKey}
+  DbtBuildDispatchRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: commerce-dbt-after-verified-workflow
+      EventPattern: {source: [aws.states], detail-type: [Step Functions Execution Status Change], detail: {stateMachineArn: [!Ref CustomerOrchestrator], status: [SUCCEEDED]}}
+      State: ENABLED
+      Targets: [{Arn: !GetAtt DbtBuildDispatcherFunction.Arn, Id: dbt-build-dispatcher, RetryPolicy: {MaximumEventAgeInSeconds: 3600, MaximumRetryAttempts: 12}}]
+  DbtBuildDispatchPermission:
+    Type: AWS::Lambda::Permission
+    Properties: {Action: lambda:InvokeFunction, FunctionName: !Ref DbtBuildDispatcherFunction, Principal: events.amazonaws.com, SourceArn: !GetAtt DbtBuildDispatchRule.Arn}
+  DbtBuildFailuresAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties: {AlarmName: commerce-dbt-athena-build-failures, Namespace: AWS/CodeBuild, MetricName: FailedBuilds, Dimensions: [{Name: ProjectName, Value: !Ref DbtBuildProject}], Statistic: Sum, Period: 300, EvaluationPeriods: 1, Threshold: 1, ComparisonOperator: GreaterThanOrEqualToThreshold, TreatMissingData: notBreaching, AlarmActions: [!Ref AlertTopicArn]}
+  DailyOrderRevenueQuery:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Name: commerce-daily-order-revenue
+      Database: commerce_analytics
+      Description: Daily order and completed-payment performance.
+      QueryString: "SELECT cast(ordered_at AS date) AS order_date, count(*) AS order_count, sum(order_total_amount) AS gross_order_amount, sum(completed_payment_amount) AS completed_payment_amount, sum(return_count) AS return_count FROM fct_orders WHERE ordered_at IS NOT NULL GROUP BY 1 ORDER BY 1 DESC"
+  CategorySalesQuery:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Name: commerce-category-sales
+      Database: commerce_analytics
+      Description: Product category sales and unit performance.
+      QueryString: "SELECT products.category, count(*) AS order_item_count, sum(items.quantity) AS units_sold, sum(items.line_item_amount) AS gross_merchandise_value FROM fct_order_items AS items INNER JOIN dim_products AS products ON items.product_id = products.product_id GROUP BY 1 ORDER BY gross_merchandise_value DESC"
+  PaymentPerformanceQuery:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Name: commerce-payment-performance
+      Database: commerce_analytics
+      Description: Payment attempt and amount performance by method and status.
+      QueryString: "SELECT payment_status, payment_method, count(*) AS payment_attempt_count, sum(payment_amount) AS payment_amount FROM fct_payments GROUP BY 1, 2 ORDER BY payment_status, payment_amount DESC"
+  FulfillmentPerformanceQuery:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Name: commerce-fulfillment-performance
+      Database: commerce_analytics
+      Description: Shipment volume and delivery duration by carrier and status.
+      QueryString: "SELECT shipment_status, carrier, count(*) AS shipment_count, avg(date_diff('day', shipped_at, delivered_at)) AS average_delivery_days FROM fct_shipments WHERE shipped_at IS NOT NULL AND delivered_at IS NOT NULL GROUP BY 1, 2 ORDER BY shipment_count DESC"
 Outputs:
   StateMachineArn: {Value: !Ref CustomerOrchestrator}
   RegistrarFunctionArn: {Value: !GetAtt OrchestratorFunction.Arn}
   EventDeadLetterQueueUrl: {Value: !Ref EventFailureQueue}
+  DbtBuildProjectName: {Value: !Ref DbtBuildProject}

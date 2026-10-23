@@ -19,6 +19,23 @@ jobs:
         run: python -m compileall -q scripts src tests
       - name: Run contract tests
         run: python -m unittest discover -s tests -v
+      - name: Validate dbt project structure
+        run: |
+          python -m pip install "dbt-core==1.12.0" "dbt-athena==1.11.1"
+          mkdir -p .ci-dbt
+          cat > .ci-dbt/profiles.yml <<'EOF'
+          commerce_analytics:
+            target: ci
+            outputs:
+              ci:
+                type: athena
+                database: awsdatacatalog
+                schema: commerce_analytics
+                region_name: us-east-1
+                s3_staging_dir: s3://example-bucket/athena-results/dbt/
+                s3_data_dir: s3://example-bucket/gold_dbt/
+          EOF
+          dbt parse --project-dir dbt --profiles-dir .ci-dbt
       - name: Verify CloudFormation syntax
         run: cfn-lint infrastructure/phase6-orchestration.yaml
       - name: Build deployable packages
