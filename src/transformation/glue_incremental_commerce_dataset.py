@@ -32,6 +32,14 @@ table = f"glue_catalog.commerce_incremental.{dataset}_iceberg"
 location = f"s3://{args['BUCKET']}/silver_iceberg/{dataset}/"
 lease_seconds = 300
 heartbeat_seconds = 30
+simulate_post_merge_failure = "--SIMULATE_POST_MERGE_FAILURE" in sys.argv and (
+    sys.argv[sys.argv.index("--SIMULATE_POST_MERGE_FAILURE") + 1].lower() == "true"
+)
+if "--LEASE_SECONDS" in sys.argv:
+    lease_seconds = int(sys.argv[sys.argv.index("--LEASE_SECONDS") + 1])
+    if lease_seconds < 30:
+        raise ValueError("LEASE_SECONDS must be at least 30")
+heartbeat_seconds = max(5, min(heartbeat_seconds, lease_seconds // 3))
 
 sc = SparkContext.getOrCreate()
 glue = GlueContext(sc)
@@ -110,6 +118,19 @@ def source_frame():
         raise ValueError(f"{dataset} contains an empty primary key or no rows")
     if frame.select(key).distinct().count() != count:
         raise ValueError(f"{dataset} contains duplicate {key}")
+    invalid = F.lit(False)
+    for column in cfg.get("date_columns", ()):
+        invalid = invalid | F.expr(f"try_to_timestamp({column}) IS NULL")
+    for column in cfg.get("numeric_nonnegative", ()):
+        invalid = invalid | F.expr(f"try_cast({column} AS DECIMAL(18,2)) IS NULL") | F.expr(f"try_cast({column} AS DECIMAL(18,2)) < 0")
+    for column in cfg.get("positive_integers", ()):
+        invalid = invalid | F.expr(f"try_cast({column} AS BIGINT) IS NULL") | F.expr(f"try_cast({column} AS BIGINT) <= 0")
+    for column, values in cfg.get("allowed_values", {}).items():
+        invalid = invalid | (~F.lower(F.col(column)).isin(*values))
+    if dataset == "shipments":
+        invalid = invalid | F.expr("try_to_timestamp(delivery_date) < try_to_timestamp(ship_date)")
+    if frame.filter(invalid).count():
+        raise ValueError(f"{dataset} violates its quality contract")
     return frame.cache()
 
 
@@ -177,6 +198,8 @@ def main():
             ledger.assert_owned(dataset, batch_id, token)
         merge_may_have_committed = mode == "MERGE"
         apply_change(frame)
+        if simulate_post_merge_failure:
+            raise RuntimeError("SIMULATED POST-MERGE FAILURE")
         if heartbeat:
             heartbeat.assert_healthy()
             heartbeat.stop()

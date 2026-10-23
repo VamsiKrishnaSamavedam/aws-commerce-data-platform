@@ -10,6 +10,9 @@ DATASETS = {
         "mode": "upsert",
         "timestamp": "updated_at",
         "references": (),
+        "date_columns": ("created_at", "updated_at"),
+        "numeric_nonnegative": (),
+        "allowed_values": {},
     },
     "products": {
         "key": "product_id",
@@ -17,6 +20,9 @@ DATASETS = {
         "mode": "upsert",
         "timestamp": "updated_at",
         "references": (),
+        "date_columns": ("updated_at",),
+        "numeric_nonnegative": ("price",),
+        "allowed_values": {},
     },
     "orders": {
         "key": "order_id",
@@ -24,6 +30,9 @@ DATASETS = {
         "mode": "upsert",
         "timestamp": "updated_at",
         "references": (("customer_id", "customers"),),
+        "date_columns": ("order_date", "updated_at"),
+        "numeric_nonnegative": ("total_amount",),
+        "allowed_values": {"status": ("pending", "processing", "completed", "cancelled", "shipped")},
     },
     "order_items": {
         "key": "order_item_id",
@@ -31,6 +40,10 @@ DATASETS = {
         "mode": "append_only",
         "timestamp": None,
         "references": (("order_id", "orders"), ("product_id", "products")),
+        "date_columns": (),
+        "numeric_nonnegative": ("quantity", "unit_price"),
+        "positive_integers": ("quantity",),
+        "allowed_values": {},
     },
     "payments": {
         "key": "payment_id",
@@ -38,6 +51,9 @@ DATASETS = {
         "mode": "append_only",
         "timestamp": None,
         "references": (("order_id", "orders"),),
+        "date_columns": ("payment_date",),
+        "numeric_nonnegative": ("amount",),
+        "allowed_values": {"payment_status": ("pending", "completed", "failed", "refunded")},
     },
     "shipments": {
         "key": "shipment_id",
@@ -45,6 +61,9 @@ DATASETS = {
         "mode": "upsert",
         "timestamp": "updated_at",
         "references": (("order_id", "orders"),),
+        "date_columns": ("ship_date", "delivery_date", "updated_at"),
+        "numeric_nonnegative": (),
+        "allowed_values": {"status": ("pending", "shipped", "in_transit", "delivered", "cancelled")},
     },
     "returns": {
         "key": "return_id",
@@ -52,6 +71,9 @@ DATASETS = {
         "mode": "append_only",
         "timestamp": None,
         "references": (("order_id", "orders"), ("product_id", "products")),
+        "date_columns": ("return_date",),
+        "numeric_nonnegative": (),
+        "allowed_values": {},
     },
 }
 

@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "dist" / "phase6_orchestrator.zip"
 FILES = (
     "scripts/register_incremental_batches.py",
+    "scripts/operational_ledger_audit.py",
     "src/utils/batch_ledger.py",
     "src/utils/incremental_datasets.py",
     "src/utils/incremental_manifest.py",

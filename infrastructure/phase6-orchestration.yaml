@@ -115,6 +115,51 @@ Resources:
   EventDlqMessagesAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties: {AlarmName: commerce-incremental-customer-events-dlq-messages, Namespace: AWS/SQS, MetricName: ApproximateNumberOfMessagesVisible, Dimensions: [{Name: QueueName, Value: !GetAtt EventFailureQueue.QueueName}], Statistic: Maximum, Period: 300, EvaluationPeriods: 1, Threshold: 1, ComparisonOperator: GreaterThanOrEqualToThreshold, TreatMissingData: notBreaching, AlarmActions: [!Ref AlertTopicArn]}
+  OperationalAuditRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: commerce-operational-ledger-audit
+      AssumeRolePolicyDocument: {Version: '2012-10-17', Statement: [{Effect: Allow, Principal: {Service: lambda.amazonaws.com}, Action: sts:AssumeRole}]}
+      Policies:
+        - PolicyName: audit-ledger-and-metrics
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - {Effect: Allow, Action: [logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents], Resource: '*'}
+              - Effect: Allow
+                Action: dynamodb:Scan
+                Resource: !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${LedgerTableName}
+              - {Effect: Allow, Action: cloudwatch:PutMetricData, Resource: '*', Condition: {StringEquals: {cloudwatch:namespace: CommerceDataPlatform/Operations}}}
+  OperationalAuditFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: commerce-operational-ledger-audit
+      Runtime: python3.12
+      Handler: scripts.operational_ledger_audit.lambda_handler
+      Role: !GetAtt OperationalAuditRole.Arn
+      Timeout: 60
+      MemorySize: 256
+      Environment: {Variables: {LEDGER_TABLE: !Ref LedgerTableName}}
+      Code: {S3Bucket: !Ref ArtifactBucket, S3Key: !Ref ArtifactKey}
+  OperationalAuditSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: commerce-operational-ledger-audit-hourly
+      ScheduleExpression: rate(1 hour)
+      State: ENABLED
+      Targets: [{Arn: !GetAtt OperationalAuditFunction.Arn, Id: operational-ledger-audit}]
+  OperationalAuditPermission:
+    Type: AWS::Lambda::Permission
+    Properties: {Action: lambda:InvokeFunction, FunctionName: !Ref OperationalAuditFunction, Principal: events.amazonaws.com, SourceArn: !GetAtt OperationalAuditSchedule.Arn}
+  StuckProcessingAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties: {AlarmName: commerce-operational-stuck-processing, Namespace: CommerceDataPlatform/Operations, MetricName: StuckProcessing, Statistic: Maximum, Period: 3600, EvaluationPeriods: 1, Threshold: 1, ComparisonOperator: GreaterThanOrEqualToThreshold, TreatMissingData: notBreaching, AlarmActions: [!Ref AlertTopicArn]}
+  OperationsDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: commerce-data-platform-operations
+      DashboardBody: !Sub |
+        {"widgets":[{"type":"metric","properties":{"title":"Workflow failures","view":"timeSeries","region":"${AWS::Region}","metrics":[["AWS/States","ExecutionsFailed","StateMachineArn","${CustomerOrchestrator}"]] }},{"type":"metric","properties":{"title":"Registrar errors and DLQ","view":"timeSeries","region":"${AWS::Region}","metrics":[["AWS/Lambda","Errors","FunctionName","${OrchestratorFunction}"],["AWS/SQS","ApproximateNumberOfMessagesVisible","QueueName","${EventFailureQueue.QueueName}"]] }},{"type":"metric","properties":{"title":"Ledger audit","view":"timeSeries","region":"${AWS::Region}","metrics":[["CommerceDataPlatform/Operations","StuckProcessing"],[".","WatermarkGaps"]]}}]}
 Outputs:
   StateMachineArn: {Value: !Ref CustomerOrchestrator}
   RegistrarFunctionArn: {Value: !GetAtt OrchestratorFunction.Arn}

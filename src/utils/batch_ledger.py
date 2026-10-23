@@ -575,14 +575,17 @@ class BatchLedger:
                     "orchestration_started_at = :now, updated_at = :now"
                 ),
                 ConditionExpression=(
-                    "#st IN (:pending, :failed) AND "
+                    "(#st IN (:pending, :failed) OR "
+                    "(#st = :processing AND lease_expires_at <= :epoch)) AND "
                     "(attribute_not_exists(orchestration_lease_expires_at) "
-                    "OR orchestration_lease_expires_at <= :epoch)"
+                    "OR orchestration_lease_expires_at <= :epoch "
+                    "OR (#st = :processing AND lease_expires_at <= :epoch))"
                 ),
                 ExpressionAttributeNames={"#st": "status"},
                 ExpressionAttributeValues={
                     ":pending": "PENDING",
                     ":failed": "FAILED",
+                    ":processing": "PROCESSING",
                     ":token": token,
                     ":expiry": int(now.timestamp()) + lease_seconds,
                     ":epoch": int(now.timestamp()),

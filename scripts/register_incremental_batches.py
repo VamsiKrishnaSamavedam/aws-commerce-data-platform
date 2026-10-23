@@ -8,6 +8,7 @@ import argparse
 import hashlib
 import json
 import os
+import time
 from uuid import uuid4
 from urllib.parse import unquote_plus, urlparse
 
@@ -91,7 +92,12 @@ def register_manifest(manifest_uri, s3_client=None, ledger=None):
     if batch["status"] == "COMPLETED":
         action = "SKIP_COMPLETED"
     elif batch["status"] == "PROCESSING":
-        action = "SKIP_ACTIVE"
+        if int(batch.get("lease_expires_at", 0)) <= int(time.time()) and ledger.reserve_orchestration(
+            manifest["dataset"], manifest["batch_id"],
+        ):
+            action = "START_GLUE"
+        else:
+            action = "SKIP_ACTIVE"
     elif manifest["sequence"] == completed + 1:
         if ledger.reserve_orchestration(
             manifest["dataset"], manifest["batch_id"],
